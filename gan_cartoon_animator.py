@@ -1,5 +1,6 @@
 from tqdm import tqdm
 import numpy as np
+import cv2
 import pandas as pd
 import os
 from PIL import Image
@@ -150,6 +151,59 @@ writer_fake = SummaryWriter(f"logs/FACEGEN/test_fake")
 print("starting training...")
 print(f"Batches: {num_batches}. Batch Size: {BS}. EPOCHS: {EPOCHS}. LR: {LR}.")
 
+def inverse_normalize(tensor, mean, std):
+    for t, m, s in zip(tensor, mean, std):
+        t.mul_(s).add_(m)
+    return tensor
+
+# image_file: tensor of images.
+# saves training image progression as gif.
+import imageio
+import shutil 
+images_to_gif = []
+def save_training_images(image_file):
+	# convert image_file tensor -> np array
+	# image_file = image_file.numpy()
+	for i in image_file:
+		images_to_gif.append(i.permute(1,2,0).numpy())
+	imageio.mimsave('./training_visual.gif', images_to_gif)
+
+# param: image_file -> torch.Tensor file (.pt) containing images.
+# param: delay -> delay (ms) between each image.
+def play_training_images(image_file, delay):
+	image_file = image_file.numpy()
+	# image_file1 = image_file[:len(image_file)//6] # first quarter
+	# image_file2 = image_file[-len(image_file)//4:] # fourth half
+	# image_file = np.concatenate((image_file1, image_file2))
+	print(len(image_file))
+	iters = 0
+	for i in image_file:
+		iters += 1
+		print(f"tensor shape: {i.shape}, training progress index: {iters}")
+		img = i.transpose(1,2,0)
+		img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+		img = cv2.resize(img, (750, 750))
+		cv2.imshow('training images', img)
+		k = cv2.waitKey(delay)
+		if k == ord('q'):
+			break
+
+play_training_images(torch.load('training_img_grid.pt'), 30)
+
+def generate_image(model_file):
+	netG = Generator().to(device)
+	netG.load_state_dict(torch.load(model_file, map_location=torch.device('cpu')))
+	noise = torch.randn(64, nz, 1, 1, device=device)
+	fake = netG(noise)
+	print("genning")
+	img = vutils.make_grid(fake, padding=2, normalize=True)
+	plt.figure(figsize=(12,12))
+	plt.axis('off')
+	plt.imshow(img.detach().numpy().transpose(1,2,0))
+	plt.show()
+
+# generate_image(model_file='models/netG_EPOCHS=10_IMGSIZE=64.pth')
+
 def train():
 	start_time = time.time()
 	G_losses = []
@@ -223,4 +277,7 @@ def train():
 	plt.show()
 
 if __name__ == "__main__":
-	train()
+	# train()
+	image_tensor = torch.load('training_img_grid.pt')
+	# play_training_images(image_tensor)
+
