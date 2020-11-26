@@ -164,9 +164,17 @@ images_to_gif = []
 def save_training_images(image_file):
 	# convert image_file tensor -> np array
 	# image_file = image_file.numpy()
+	iters = 0
 	for i in image_file:
-		images_to_gif.append(i.permute(1,2,0).numpy())
+		iters += 1
+		if iters % 5 == 0:
+			print('images appended: ', iters)
+			images_to_gif.append(i.permute(1,2,0).numpy())
+		else:
+			pass
 	imageio.mimsave('./training_visual.gif', images_to_gif)
+
+save_training_images(torch.load('training_img_grid.pt'))
 
 # param: image_file -> torch.Tensor file (.pt) containing images.
 # param: delay -> delay (ms) between each image.
@@ -188,7 +196,7 @@ def play_training_images(image_file, delay):
 		if k == ord('q'):
 			break
 
-play_training_images(torch.load('training_img_grid.pt'), 30)
+# play_training_images(torch.load('training_img_grid.pt'), 30)
 
 def generate_image(model_file):
 	netG = Generator().to(device)
@@ -278,6 +286,6 @@ def train():
 
 if __name__ == "__main__":
 	# train()
-	image_tensor = torch.load('training_img_grid.pt')
+	# image_tensor = torch.load('training_img_grid.pt')
 	# play_training_images(image_tensor)
-
+	pass
