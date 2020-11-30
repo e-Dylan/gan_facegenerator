@@ -70,22 +70,26 @@ class Generator(nn.Module):
 		
 		self.net = nn.Sequential(
 			# input z = noise, latent vector
-            nn.ConvTranspose2d(nz, ngf*8, 4, 1, 0, bias=False),
-            nn.BatchNorm2d(ngf*8),
+            nn.ConvTranspose2d(nz, ngf*16, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(ngf*16),
             nn.ReLU(True),
             # ngf*8 x 4 x 4
-            nn.ConvTranspose2d(ngf*8, ngf * 4, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ngf*4),
+            nn.ConvTranspose2d(ngf*16, ngf*8, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf*8),
             nn.ReLU(True),
             # ngf*4 x 8 x 8
+            nn.ConvTranspose2d(ngf*8, ngf*4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf*4),
+            nn.ReLU(True),
+            # ngf*2 x 16 x 16
             nn.ConvTranspose2d(ngf*4, ngf*2, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf*2),
             nn.ReLU(True),
-            # ngf*2 x 16 x 16
-            nn.ConvTranspose2d(ngf*2, ngf, 4, 2, 1, bias=False),
+            # ngf x 32 x 32
+			nn.ConvTranspose2d(ngf*2, ngf, 4, 2, 1, bias=False),
             nn.BatchNorm2d(ngf),
             nn.ReLU(True),
-            # ngf x 32 x 32
+			# ngf x N x N
             nn.ConvTranspose2d(ngf, IMG_CHANNELS, 4, 2, 1, bias=False),
             nn.Tanh()
             # nc x 64 x 64
@@ -115,10 +119,14 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             # ndf*4 x 8 x 8
             nn.Conv2d(ndf*4, ndf*8, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(ndf * 8),
+            nn.BatchNorm2d(ndf*8),
+            nn.LeakyReLU(0.2, inplace=True),
+			# ndf*4 x 8 x 8
+            nn.Conv2d(ndf*8, ndf*16, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf*16),
             nn.LeakyReLU(0.2, inplace=True),
             # ndf*8 x 4 x 4
-            nn.Conv2d(ndf*8, 1, 4, 1, 0, bias=False),
+            nn.Conv2d(ndf*16, 1, 4, 1, 0, bias=False),
             nn.Sigmoid()
 		)
 	
@@ -148,13 +156,10 @@ print("Running on GPU" if torch.cuda.is_available() else print("Running on CPU S
 writer_real = SummaryWriter(f"logs/FACEGEN/test_real")
 writer_fake = SummaryWriter(f"logs/FACEGEN/test_fake")
 
-print("starting training...")
-print(f"Batches: {num_batches}. Batch Size: {BS}. EPOCHS: {EPOCHS}. LR: {LR}.")
-
-def inverse_normalize(tensor, mean, std):
-    for t, m, s in zip(tensor, mean, std):
-        t.mul_(s).add_(m)
-    return tensor
+# def inverse_normalize(tensor, mean, std):
+#     for t, m, s in zip(tensor, mean, std):
+#         t.mul_(s).add_(m)
+#     return tensor
 
 # image_file: tensor of images.
 # saves training image progression as gif.
@@ -174,7 +179,7 @@ def save_training_images(image_file):
 			pass
 	imageio.mimsave('./training_visual.gif', images_to_gif)
 
-save_training_images(torch.load('training_img_grid.pt'))
+# save_training_images(torch.load('training_img_grid.pt'))
 
 # param: image_file -> torch.Tensor file (.pt) containing images.
 # param: delay -> delay (ms) between each image.
@@ -197,22 +202,27 @@ def play_training_images(image_file, delay):
 			break
 
 # play_training_images(torch.load('training_img_grid.pt'), 30)
-
+from PIL import Image
 def generate_image(model_file):
 	netG = Generator().to(device)
 	netG.load_state_dict(torch.load(model_file, map_location=torch.device('cpu')))
-	noise = torch.randn(64, nz, 1, 1, device=device)
+	# noise = torch.randn(1, nz, 1, 1, device=device)
+	noise = torch.ones(1, nz, 1, 1, device=device)
 	fake = netG(noise)
-	print("genning")
-	img = vutils.make_grid(fake, padding=2, normalize=True)
-	plt.figure(figsize=(12,12))
+	print(noise)
+	img = vutils.make_grid(fake[0], padding=2, normalize=True)
 	plt.axis('off')
-	plt.imshow(img.detach().numpy().transpose(1,2,0))
+	img = img.detach().permute(1,2,0)
+	plt.imshow(img)
 	plt.show()
 
 # generate_image(model_file='models/netG_EPOCHS=10_IMGSIZE=64.pth')
+generate_image(model_file='models/netG_EPOCHS=12_IMGSIZE=128.pth')
 
 def train():
+	print("starting training...")
+	print(f"Batches: {num_batches}. Batch Size: {BS}. EPOCHS: {EPOCHS}. LR: {LR}.")
+
 	start_time = time.time()
 	G_losses = []
 	D_losses = []
